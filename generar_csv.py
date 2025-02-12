@@ -1,60 +1,80 @@
+import spacy
+import logging
 import pandas as pd
-import openpyxl
-import unicodedata
-from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
+from datetime import datetime
 
-def limpiar_nombre(nombre):
-    """Elimina tildes y normaliza caracteres especiales en los nombres."""
-    return ''.join(c for c in unicodedata.normalize('NFKD', nombre) if not unicodedata.combining(c))
+# Cargar modelo de NLP
+nlp = spacy.load("es_core_news_md")
 
-def generar_csv_con_formato(df):
-    """Genera un archivo Excel con formato mejorado a partir de un DataFrame"""
-    
-    # Guardar como archivo Excel
-    ruta_salida = "reporte_formateado.xlsx"
-    df.to_excel(ruta_salida, index=False)
+# Lista manual de meses en español
+meses_espanol = [
+    "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+]
 
-    # Cargar el archivo Excel con openpyxl
-    wb = openpyxl.load_workbook(ruta_salida)
-    ws = wb.active
+def obtener_franja_horaria(hora):
+    if 5 <= hora < 13:
+        return "Mañana"
+    elif 13 <= hora < 19:
+        return "Tarde"
+    else:
+        return "Noche"
 
-    # Aplicar estilo a la primera fila (encabezados)
-    header_fill = PatternFill(start_color="003366", end_color="003366", fill_type="solid")  # Azul oscuro
-    header_font = Font(color="FFFFFF", bold=True)  # Texto blanco y negrita
-    border_style = Border(left=Side(style='thin'),
-                          right=Side(style='thin'),
-                          top=Side(style='thin'),
-                          bottom=Side(style='thin'))
+def clasificar_status(oracion):
+    oracion_lower = oracion.lower()
+    if any(word in oracion_lower for word in ["cerrado", "finalizado"]):
+        return "Cerrado"
+    elif any(word in oracion_lower for word in ["pendiente", "validar", "terminar", "tener en cuenta"]):
+        return "En espera"
+    elif any(word in oracion_lower for word in ["proceso", "trabajando"]):
+        return "En proceso"
+    else:
+        return "En proceso"
+
+def analizar_message_ia(message, usuario, fecha):
+    if not hasattr(message, "text") or not message.text:
+        return pd.DataFrame()
+
+    mensaje_texto = message.text
+    doc = nlp(mensaje_texto)
+    actividades = []
+    hora = datetime.fromtimestamp(fecha).hour
+    franja_horaria = obtener_franja_horaria(hora)
+
+    # Obtener el mes en español
+    numero_mes = datetime.fromtimestamp(fecha).month
+    nombre_mes = meses_espanol[numero_mes]
+
+    lineas = mensaje_texto.split("\n")
+    actividad_actual = None  
+
+    for linea in lineas:
+        linea = linea.strip()
+        if linea.startswith("*"):
+            if actividad_actual:
+                actividades.append(actividad_actual)
+            
+            actividad_actual = {
+                "TK": "N/A",
+                "CATEGORIA": "Evento/Solicitud",
+                "IMPACTO": "Bajo",
+                "ACTIVIDAD": linea[1:].strip(),
+                "STATUS": "En proceso",
+                "OBSERVACION": "N/A",
+                "Escalado": "No",
+                "Revisado por": usuario,
+                "Franja Horaria": franja_horaria,
+                "DIA": datetime.fromtimestamp(fecha).day,
+                "MES": nombre_mes,  # ✅ Ahora el mes aparece en español
+                "AÑO": datetime.fromtimestamp(fecha).year
+            }
+
+        if actividad_actual:
+            actividad_actual["STATUS"] = clasificar_status(actividad_actual["ACTIVIDAD"])
+
+    if actividad_actual:
+        actividades.append(actividad_actual)
+
+    df = pd.DataFrame(actividades)
     
-    for cell in ws[1]:
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.border = border_style
-    
-    # Aplicar colores alternos a las filas de datos
-    fill_azul_claro = PatternFill(start_color="CCECFF", end_color="CCECFF", fill_type="solid")
-    fill_blanco = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-    
-    for i, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column)):
-        fill = fill_azul_claro if i % 2 == 0 else fill_blanco
-        for cell in row:
-            cell.fill = fill
-            cell.border = border_style
-            cell.alignment = Alignment(wrap_text=True, vertical="top")
-    
-    # Ajustar ancho de columnas automáticamente
-    for col in ws.columns:
-        max_length = 0
-        col_letter = col[0].column_letter
-        for cell in col:
-            try:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            except:
-                pass
-        ws.column_dimensions[col_letter].width = max_length + 2  # Ajustar con un margen extra
-    
-    # Guardar cambios
-    wb.save(ruta_salida)
-    print(f"✅ Archivo generado correctamente: {ruta_salida}")
+    return df
