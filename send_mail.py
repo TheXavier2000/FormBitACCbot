@@ -104,8 +104,8 @@ def send_mail(destinatario, cc_list, df):
         mail = outlook.CreateItem(0)  # Crear nuevo correo
 
         #Definición del correo destinatario y copia de correo
-        destinatario = "vilopez@azteca-comunicaciones.com"
-        cc_list = ["", ""]
+        destinatario = "emolina@azteca-comunicaciones.com"
+        cc_list = ["nocti@azteca-comunicaciones.com", ""]
 
         mail.To = destinatario
         mail.CC = "; ".join(cc_list) if cc_list else ""  
