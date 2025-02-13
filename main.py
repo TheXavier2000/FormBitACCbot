@@ -46,7 +46,7 @@ def recibir_message(message):
     fecha_actual = datetime.now()
 
     df = pd.DataFrame()
-    df = analizar_message_ia(message, usuario, fecha_actual.timestamp(), DESTINATARIO_DEFAULT, CC_LIST_DEFAULT, df)
+    df = analizar_message_ia(message, usuario, fecha_actual, fecha_actual, DESTINATARIO_DEFAULT, CC_LIST_DEFAULT, df, fecha_actual.timestamp())
 
     if df is None or df.empty:
         bot.reply_to(message, "⚠️ No se pudo generar la tabla correctamente. Verifica tu mensaje.")
