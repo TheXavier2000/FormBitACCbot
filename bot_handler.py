@@ -77,16 +77,20 @@ def procesar_mensaje(update, context):
     user = update.message.from_user.username or update.message.from_user.first_name
     correo_usuario = credenciales_pendientes[user]["correo"]
     
-    df = analizar_message_ia(update.message, user, update.message.date.timestamp())
+    df = analizar_message_ia(update.message, user, update.message.date.timestamp(), destinatario, cc_list, df)
 
     if df is not None and not df.empty:
         logging.info(f"✅ DataFrame generado correctamente:\n{df}")
 
-        # Enviar correo si las credenciales son válidas
-        enviar_correo_outlook(df, correo_usuario, ["vilopez@azteca-comunicaciones.com"], correo_usuario)
-        update.message.reply_text("📧 Correo enviado con éxito.")
+        destinatario = os.getenv("EMAIL_DESTINATARIO")
+        cc_list = [correo_usuario]
+
+        if enviar_correo_outlook(df, destinatario, cc_list, correo_usuario):
+            update.message.reply_text("📧 Correo enviado con éxito.")
+        else:
+            update.message.reply_text("❌ Error enviando el correo.")
     else:
-        update.message.reply_text("⚠️ No se pudo generar un DataFrame válido.")
+        update.message.reply_text("⚠️ No se generó información válida.")
 
 def start_bot():
     updater = Updater(TOKEN, use_context=True)
