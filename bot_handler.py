@@ -13,9 +13,13 @@ from generar_csv import analizar_message_ia
 # Cargar variables de entorno
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+GROUP_ID = os.getenv("TELEGRAM_GRUPO_NOC_TI_ID")  # Asegúrate de que el ID del grupo está bien escrito en el .env
+
 
 if not TOKEN:
     raise ValueError("\n❌ ERROR: No se encontró el token de Telegram. Verifica tu archivo .env.\n")
+if not GROUP_ID:
+    raise ValueError("\n❌ ERROR: No se encontró el ID del grupo. Verifica tu archivo .env.\n")
 
 # Configuración de logging
 logging.basicConfig(
@@ -23,6 +27,9 @@ logging.basicConfig(
     format="\n%(asctime)s - %(levelname)s - %(message)s\n",
     handlers=[logging.StreamHandler()]
 )
+
+# Inicializar bot de Telegram
+bot = telegram.Bot(token=TOKEN)
 
 # Estados de la conversación en Telegram
 CORREO, PASSWORD = range(2)
@@ -92,9 +99,24 @@ def procesar_mensaje(update, context):
     else:
         update.message.reply_text("⚠️ No se generó información válida.")
 
+
+def reenviar_mensaje(update, context):
+    """ Reenvía el mensaje recibido al grupo especificado. """
+    user = update.message.from_user.username or update.message.from_user.first_name
+    mensaje = update.message.text
+
+    if mensaje:
+        mensaje_reenviado = f"📢 *{user} envió un mensaje:*\n\n{mensaje}"
+        bot.send_message(chat_id=GROUP_ID, text=mensaje_reenviado, parse_mode="Markdown")
+        logging.info(f"✅ Mensaje reenviado al grupo {GROUP_ID}")
+
+
 def start_bot():
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
+
+    # Agregar manejador para reenviar mensajes
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, reenviar_mensaje))
 
     conv_handler = ConversationHandler(
         entry_points=[MessageHandler(Filters.text & ~Filters.command, solicitar_correo)],
