@@ -8,14 +8,17 @@ from datetime import datetime
 from io import StringIO
 from send_mail import send_mail
 
-# Obtener la ruta del directorio donde está el script
-dir_path = os.path.dirname(os.path.abspath(__file__))
 
-# Construir la ruta relativa del modelo
-model_path = os.path.join(dir_path, "es_core_news_md-3.8.0")
+# Detectar si el código está en un ejecutable o en desarrollo
+if getattr(sys, 'frozen', False):  # Si el código está en un ejecutable .exe
+    base_path = sys._MEIPASS  # Carpeta temporal donde PyInstaller extrae archivos
+    model_path = os.path.join(base_path, "es_core_news_md")  # Ruta del modelo en el ejecutable
+else:
+    model_path = "es_core_news_md"  # Ruta estándar cuando se ejecuta en Python normal
 
-# Cargar el modelo desde la carpeta del proyecto
+# Cargar el modelo desde la ruta correcta
 nlp = spacy.load(model_path)
+
 
 # Lista de meses en español
 meses_espanol = [
