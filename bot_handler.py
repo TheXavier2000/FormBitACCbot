@@ -1,7 +1,6 @@
 import os
 import logging
 import smtplib
-import main
 from datetime import datetime
 import telegram
 from send_mail import send_mail

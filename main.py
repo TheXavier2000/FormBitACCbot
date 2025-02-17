@@ -2,6 +2,7 @@ import os
 import re
 import logging
 import locale
+import psutil
 import pandas as pd
 import subprocess
 from dotenv import load_dotenv
@@ -9,30 +10,6 @@ import telebot
 from datetime import datetime
 from generar_csv import analizar_message_ia
 from send_mail import send_mail  # Se importa la función correcta
-
-# 📌 Ruta del script de la interfaz gráfica
-script_path = os.path.join(os.path.dirname(__file__), "notes.py")
-
-# 📌 Verificar si la GUI ya está en ejecución
-def gui_ya_ejecutandose():
-    import psutil
-    for proc in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
-        try:
-            if proc.info["cmdline"] and "notes.py" in proc.info["cmdline"]:
-                return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            continue
-    return False
-
-# 📌 Iniciar la GUI si no está abierta
-if not gui_ya_ejecutandose():
-    try:
-        subprocess.Popen(["python", script_path], creationflags=subprocess.DETACHED_PROCESS)
-    except Exception as e:
-        print(f"❌ Error al iniciar la interfaz gráfica: {e}")
-
-# 📌 Configurar el idioma para que los meses aparezcan en español
-locale.setlocale(locale.LC_TIME, "es_ES.utf8")  # Puede variar según el sistema operativo
 
 # 📌 Cargar variables de entorno
 load_dotenv()
@@ -49,6 +26,47 @@ bot = telebot.TeleBot(TOKEN)
 
 print(f"✅ Bot iniciado con éxito: {TOKEN[:10]}...")
 
+# 📌 Ruta del script de la interfaz gráfica
+script_path = os.path.join(os.path.dirname(__file__), "notes.py")
+
+# 📌 Verificar si la GUI ya está en ejecución
+def gui_ya_ejecutandose():
+    for proc in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
+        try:
+            if proc.info["cmdline"] and "notes.py" in proc.info["cmdline"]:
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+    return False
+
+# 📌 Función para detener otras instancias de main.py y notes.py
+def detener_otras_instancias():
+    script_name = os.path.basename(__file__)  # Nombre del script actual
+    current_pid = os.getpid()  # PID del proceso actual
+
+    for proc in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
+        try:
+            cmdline = proc.info["cmdline"]
+            if cmdline and ("main.py" in cmdline or "notes.py" in cmdline) and proc.info["pid"] != current_pid:
+                print(f"🛑 Terminando proceso duplicado: {proc.info['pid']}")
+                proc.terminate()  # Intenta cerrar el proceso
+                proc.wait(timeout=5)  # Esperar a que el proceso termine
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+# 📌 Detener otras instancias antes de iniciar
+detener_otras_instancias()
+
+# 📌 Iniciar la GUI si no está abierta
+if not gui_ya_ejecutandose():
+    try:
+        subprocess.Popen(["python", script_path, TOKEN], creationflags=subprocess.DETACHED_PROCESS)
+    except Exception as e:
+        print(f"❌ Error al iniciar la interfaz gráfica: {e}")
+
+# 📌 Configurar el idioma para que los meses aparezcan en español
+locale.setlocale(locale.LC_TIME, "es_ES.utf8")  # Puede variar según el sistema operativo
+
 # 📌 Importar destinatarios desde las variables de entorno
 DESTINATARIO_DEFAULT = os.getenv("EMAIL_DESTINATARIO")
 CC_LIST_DEFAULT = os.getenv("EMAIL_CC_LIST").split(",") if os.getenv("EMAIL_CC_LIST") else []
@@ -64,6 +82,8 @@ def recibir_message(message):
     fecha_actual = datetime.now()
     fecha_timestamp = fecha_actual.timestamp()  # Convertimos la fecha a timestamp
 
+    # Inicializar df si no está definido
+    df = pd.DataFrame()
 
     print("Mensaje:", message.text)
     print("Usuario:", usuario)
@@ -71,11 +91,6 @@ def recibir_message(message):
     print("Destinatario:", DESTINATARIO_DEFAULT)
     print("CC List:", CC_LIST_DEFAULT)
     print("DataFrame inicial:", df)
-
-
-    if df is None:
-        df = pd.DataFrame()
-
 
     # ✅ Corrección en la llamada a analizar_message_ia
     df = analizar_message_ia(message.text, usuario, fecha_timestamp, fecha_actual, DESTINATARIO_DEFAULT, CC_LIST_DEFAULT, df)
@@ -107,4 +122,4 @@ def recibir_message(message):
         logging.error(f"❌ Error al enviar el correo: {e}")
 
 # 🚀 Iniciar el bot
-bot.polling()
+bot.polling(none_stop=True, skip_pending=True)

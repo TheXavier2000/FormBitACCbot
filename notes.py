@@ -1,9 +1,14 @@
+import sys
+import tkinter as tk
+import psutil
+import telebot
 import os
 import tkinter as tk
 import psutil
 from dotenv import load_dotenv
 import telebot
 from bot_handler import procesar_texto_desde_gui  # Importar la nueva función
+
 
 # 📌 Cargar variables de entorno
 load_dotenv()
@@ -15,38 +20,28 @@ if not TOKEN or not TELEGRAM_CHAT_ID:
 
 bot = telebot.TeleBot(TOKEN)
 
-# 📌 Verificar si la GUI ya está en ejecución
-def gui_ya_ejecutandose():
-    for proc in psutil.process_iter(attrs=["pid", "name", "cmdline"]):
-        try:
-            if proc.info["cmdline"] and "notes.py" in proc.info["cmdline"]:
-                return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            continue
-    return False
 
-# 📌 Evitar múltiples instancias de la GUI
-if gui_ya_ejecutandose():
-    print("⚠️ La interfaz gráfica ya está abierta.")
-    exit()
+# 📌 Obtener el token del bot desde los argumentos de la línea de comandos
+if len(sys.argv) > 1:
+    TOKEN = sys.argv[1]
+else:
+    raise ValueError("❌ ERROR: No se proporcionó el token del bot.")
 
-# 📌 Función para enviar mensaje a Telegram y procesarlo
+# 📌 Crear la instancia del bot usando el token proporcionado
+bot = telebot.TeleBot(TOKEN)
+
+# 📌 Función para enviar mensaje a Telegram
 def enviar_mensaje():
     texto = text_area.get("1.0", tk.END).strip()
     if texto:
         try:
-            # Enviar el mensaje al bot de Telegram
             bot.send_message(TELEGRAM_CHAT_ID, f"📝 *Nuevo mensaje:* \n\n{texto}", parse_mode="Markdown")
-            
-            # Enviar el mensaje al procesamiento en bot_handler.py
-            procesar_texto_desde_gui(texto)
-
             text_area.delete("1.0", tk.END)
             estado_label.config(text="✅ Mensaje enviado y procesado", fg="green")
         except Exception as e:
             estado_label.config(text=f"❌ Error al enviar: {e}", fg="red")
 
-# 📌 Crear la interfaz tipo Bloc de Notas
+# 📌 Crear la interfaz gráfica
 root = tk.Tk()
 root.title("Bloc de Notas")
 root.geometry("600x500")
